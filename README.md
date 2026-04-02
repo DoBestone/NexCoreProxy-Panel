@@ -19,7 +19,7 @@
 - Built-in NCP Agent for communication with NexCoreProxy Master
 - REST API for remote status monitoring and inbound management
 - Multi-protocol support (VMess, VLESS, Trojan, Shadowsocks, etc.)
-- Multi-platform builds (Linux amd64/arm64/armv7/armv6/386/s390x + Windows)
+- Multi-platform builds (Linux amd64/arm64/armv7/armv6/386/armv5/s390x)
 
 ## Quick Start
 

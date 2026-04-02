@@ -19,7 +19,7 @@
 - 内置 NCP Agent，与 NexCoreProxy Master 通信
 - REST API，支持远程状态监控和入站管理
 - 多协议支持（VMess、VLESS、Trojan、Shadowsocks 等）
-- 多平台构建（Linux amd64/arm64/armv7/armv6/386/s390x + Windows）
+- 多平台构建（Linux amd64/arm64/armv7/armv6/386/armv5/s390x）
 
 ## 快速开始
 
