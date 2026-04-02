@@ -3,13 +3,13 @@ package service
 import (
 	"errors"
 
+	"github.com/xlzd/gotp"
+	"gorm.io/gorm"
 	"nexcoreproxy-panel/database"
 	"nexcoreproxy-panel/database/model"
 	"nexcoreproxy-panel/logger"
 	"nexcoreproxy-panel/util/crypto"
 	ldaputil "nexcoreproxy-panel/util/ldap"
-	"github.com/xlzd/gotp"
-	"gorm.io/gorm"
 )
 
 // UserService provides business logic for user management and authentication.

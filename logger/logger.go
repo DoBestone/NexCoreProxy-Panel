@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"time"
 
-	"nexcoreproxy-panel/config"
 	"github.com/op/go-logging"
+	"nexcoreproxy-panel/config"
 )
 
 const (
