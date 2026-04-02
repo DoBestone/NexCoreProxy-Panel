@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"nexcoreproxy-panel/database"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -161,13 +163,20 @@ func cmdSetPort(port string) {
 
 func cmdSetUser(user string) {
 	db := database.GetDB()
-	db.Exec("UPDATE settings SET value = ? WHERE `key` = 'webUsername'", user)
+	// 3x-ui 认证用 users 表，不是 settings 表
+	db.Exec("UPDATE users SET username = ? WHERE id = (SELECT MIN(id) FROM users)", user)
 	fmt.Printf("用户名已设置为: %s\n", user)
 }
 
 func cmdSetPass(pass string) {
 	db := database.GetDB()
-	db.Exec("UPDATE settings SET value = ? WHERE `key` = 'webPassword'", pass)
+	// 3x-ui 认证用 users 表，密码需要 bcrypt hash
+	hashedPass, err := bcryptHash(pass)
+	if err != nil {
+		fmt.Printf("密码加密失败: %v\n", err)
+		return
+	}
+	db.Exec("UPDATE users SET password = ? WHERE id = (SELECT MIN(id) FROM users)", hashedPass)
 	fmt.Println("密码已设置")
 }
 
@@ -291,15 +300,24 @@ func GetPort() string {
 	return port
 }
 
-// GetUsername returns the admin username.
+// GetUsername returns the admin username from users table.
 func GetUsername() string {
 	db := database.GetDB()
 	var user string
-	db.Raw("SELECT value FROM settings WHERE `key` = 'webUsername'").Scan(&user)
+	db.Raw("SELECT username FROM users ORDER BY id LIMIT 1").Scan(&user)
 	if user == "" {
 		return "admin"
 	}
 	return user
+}
+
+// bcryptHash generates a bcrypt hash for the password.
+func bcryptHash(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
 }
 
 func getVersion() string {
