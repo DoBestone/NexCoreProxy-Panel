@@ -184,6 +184,6 @@ jobs:
           file: x-ui-linux-${{ matrix.platform }}.tar.gz
           asset_name: x-ui-linux-${{ matrix.platform }}.tar.gz
           overwrite: true
-          prerelease: true
+          prerelease: false
 
 
