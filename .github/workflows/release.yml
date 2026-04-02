@@ -1,4 +1,4 @@
-name: Release 3X-UI
+name: Release NexCoreProxy Panel
 
 on:
   workflow_dispatch:

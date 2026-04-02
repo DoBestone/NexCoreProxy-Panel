@@ -129,7 +129,7 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleInbounds(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
-		http.Error(w, "Method not allowed", 405)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	sqlDB, err := s.db.DB()
@@ -217,7 +217,7 @@ func (s *Server) handleInbound(w http.ResponseWriter, r *http.Request) {
 		}
 		jsonResp(w, map[string]any{"success": true})
 	default:
-		http.Error(w, "Method not allowed", 405)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -274,7 +274,7 @@ func (s *Server) handleClients(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", 405)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	go exec.Command("systemctl", "restart", "x-ui").Run()
@@ -283,7 +283,7 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRestartXray(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", 405)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	exec.Command("pkill", "-f", "xray-linux").Run()
