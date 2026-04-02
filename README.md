@@ -1,57 +1,52 @@
-[English](/README.md) | [فارسی](/README.fa_IR.md) | [العربية](/README.ar_EG.md) |  [中文](/README.zh_CN.md) | [Español](/README.es_ES.md) | [Русский](/README.ru_RU.md)
+[English](/README.md) | [中文](/README.zh_CN.md)
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./media/3x-ui-dark.png">
-    <img alt="3x-ui" src="./media/3x-ui-light.png">
-  </picture>
-</p>
+# NexCoreProxy Panel
 
-[![Release](https://img.shields.io/github/v/release/mhsanaei/3x-ui.svg)](https://github.com/MHSanaei/3x-ui/releases)
-[![Build](https://img.shields.io/github/actions/workflow/status/mhsanaei/3x-ui/release.yml.svg)](https://github.com/MHSanaei/3x-ui/actions)
-[![GO Version](https://img.shields.io/github/go-mod/go-version/mhsanaei/3x-ui.svg)](#)
-[![Downloads](https://img.shields.io/github/downloads/mhsanaei/3x-ui/total.svg)](https://github.com/MHSanaei/3x-ui/releases/latest)
+[![Release](https://img.shields.io/github/v/release/DoBestone/NexCoreProxy-Panel.svg)](https://github.com/DoBestone/NexCoreProxy-Panel/releases)
+[![Build](https://img.shields.io/github/actions/workflow/status/DoBestone/NexCoreProxy-Panel/release.yml.svg)](https://github.com/DoBestone/NexCoreProxy-Panel/actions)
+[![GO Version](https://img.shields.io/github/go-mod/go-version/DoBestone/NexCoreProxy-Panel.svg)](#)
+[![Downloads](https://img.shields.io/github/downloads/DoBestone/NexCoreProxy-Panel/total.svg)](https://github.com/DoBestone/NexCoreProxy-Panel/releases/latest)
 [![License](https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true)](https://www.gnu.org/licenses/gpl-3.0.en.html)
-[![Go Reference](https://pkg.go.dev/badge/github.com/mhsanaei/3x-ui/v2.svg)](https://pkg.go.dev/github.com/mhsanaei/3x-ui/v2)
-[![Go Report Card](https://goreportcard.com/badge/github.com/mhsanaei/3x-ui/v2)](https://goreportcard.com/report/github.com/mhsanaei/3x-ui/v2)
 
-**3X-UI** — advanced, open-source web-based control panel designed for managing Xray-core server. It offers a user-friendly interface for configuring and monitoring various VPN and proxy protocols.
+**NexCoreProxy Panel** is the node-side management panel for the NexCoreProxy distributed proxy management system. It provides a web-based interface for configuring and monitoring Xray-core proxy services on each node, with built-in NCP Agent for centralized management by [NexCoreProxy Master](https://github.com/DoBestone/NexCoreProxy-Master).
 
-> [!IMPORTANT]
-> This project is only for personal usage, please do not use it for illegal purposes, and please do not use it in a production environment.
+> [!NOTE]
+> This project is a secondary development based on [3X-UI](https://github.com/MHSanaei/3x-ui) (GPL-3.0). We gratefully acknowledge the original 3X-UI project and its contributors for their excellent work.
 
-As an enhanced fork of the original X-UI project, 3X-UI provides improved stability, broader protocol support, and additional features.
+## Features
+
+- Web-based Xray-core management panel (inherited from 3X-UI)
+- Built-in NCP Agent for communication with NexCoreProxy Master
+- REST API for remote status monitoring and inbound management
+- Multi-protocol support (VMess, VLESS, Trojan, Shadowsocks, etc.)
+- Multi-platform builds (Linux amd64/arm64/armv7/armv6/386/s390x + Windows)
 
 ## Quick Start
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/DoBestone/NexCoreProxy-Panel/main/install.sh)
 ```
 
-For full documentation, please visit the [project Wiki](https://github.com/MHSanaei/3x-ui/wiki).
+## Architecture
 
-## A Special Thanks to
+```
+NexCoreProxy Master  <──REST API──>  NexCoreProxy Panel (this repo)
+     (Central)                         ├── Web UI (3X-UI based)
+                                       ├── NCP Agent (heartbeat + registration)
+                                       └── NCP API (status/inbounds/control)
+```
 
-- [alireza0](https://github.com/alireza0/)
+## Based On
 
-## Acknowledgment
+This project is based on [3X-UI](https://github.com/MHSanaei/3x-ui) by [MHSanaei](https://github.com/MHSanaei), which is an enhanced fork of the original [X-UI](https://github.com/vaxilu/x-ui) project. Licensed under GPL-3.0.
 
-- [Iran v2ray rules](https://github.com/chocolate4u/Iran-v2ray-rules) (License: **GPL-3.0**): _Enhanced v2ray/xray and v2ray/xray-clients routing rules with built-in Iranian domains and a focus on security and adblocking._
-- [Russia v2ray rules](https://github.com/runetfreedom/russia-v2ray-rules-dat) (License: **GPL-3.0**): _This repository contains automatically updated V2Ray routing rules based on data on blocked domains and addresses in Russia._
+## Acknowledgments
 
-## Support project
+- [3X-UI](https://github.com/MHSanaei/3x-ui) — The upstream project this panel is based on
+- [alireza0](https://github.com/alireza0/) — Major contributor to 3X-UI
+- [Iran v2ray rules](https://github.com/chocolate4u/Iran-v2ray-rules) (License: **GPL-3.0**)
+- [Russia v2ray rules](https://github.com/runetfreedom/russia-v2ray-rules-dat) (License: **GPL-3.0**)
 
-**If this project is helpful to you, you may wish to give it a**:star2:
+## License
 
-<a href="https://www.buymeacoffee.com/MHSanaei" target="_blank">
-<img src="./media/default-yellow.png" alt="Buy Me A Coffee" style="height: 70px !important;width: 277px !important;" >
-</a>
-
-</br>
-<a href="https://nowpayments.io/donation/hsanaei" target="_blank" rel="noreferrer noopener">
-   <img src="./media/donation-button-black.svg" alt="Crypto donation button by NOWPayments">
-</a>
-
-## Stargazers over Time
-
-[![Stargazers over time](https://starchart.cc/MHSanaei/3x-ui.svg?variant=adaptive)](https://starchart.cc/MHSanaei/3x-ui)
+[GPL-3.0](LICENSE)
