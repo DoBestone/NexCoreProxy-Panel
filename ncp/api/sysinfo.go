@@ -2,10 +2,10 @@ package api
 
 import (
 	"os"
-	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -88,17 +88,18 @@ func GetMemory() float64 {
 	return float64(int(usage*10)) / 10
 }
 
-// GetDisk returns root filesystem usage percentage.
+// GetDisk returns root filesystem usage percentage using syscall (no shell).
 func GetDisk() float64 {
-	out, err := exec.Command("bash", "-c", "df / | tail -1 | awk '{print $5}' | tr -d '%'").CombinedOutput()
-	if err != nil {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs("/", &stat); err != nil {
 		return 0
 	}
-	val, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
-	if err != nil {
+	if stat.Blocks == 0 {
 		return 0
 	}
-	return val
+	used := stat.Blocks - stat.Bfree
+	usage := float64(used) / float64(stat.Blocks) * 100.0
+	return float64(int(usage*10)) / 10
 }
 
 // GetUptime returns system uptime in seconds.

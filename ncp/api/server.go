@@ -17,8 +17,18 @@ import (
 
 	"nexcoreproxy-panel/ncp/agent"
 
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
+
+// bcryptHash generates a bcrypt hash for the password.
+func bcryptHash(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
+}
 
 // Server is the NCP API HTTP server.
 type Server struct {
@@ -43,6 +53,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/restart", s.auth(s.handleRestart))
 	mux.HandleFunc("/api/restart-xray", s.auth(s.handleRestartXray))
 	mux.HandleFunc("/api/settings", s.auth(s.handleSettings))
+	mux.HandleFunc("/api/xray-config", s.auth(s.handleXrayConfig))
+	mux.HandleFunc("/api/relay-outbound", s.auth(s.handleRelayOutbound))
 
 	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.port),
@@ -80,9 +92,6 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		reqToken := r.Header.Get("X-API-Token")
-		if reqToken == "" {
-			reqToken = r.URL.Query().Get("token")
-		}
 		if subtle.ConstantTimeCompare([]byte(token), []byte(reqToken)) != 1 {
 			w.WriteHeader(http.StatusUnauthorized)
 			jsonResp(w, map[string]any{"success": false, "msg": "Invalid token"})
@@ -161,6 +170,10 @@ func (s *Server) handleInbounds(w http.ResponseWriter, r *http.Request) {
 			"remark": remark, "tag": tag, "totalClient": totalClient,
 		})
 	}
+	if err := rows.Err(); err != nil {
+		jsonResp(w, map[string]any{"success": false, "msg": "读取数据失败"})
+		return
+	}
 	jsonResp(w, map[string]any{"success": true, "data": inbounds})
 }
 
@@ -169,7 +182,9 @@ func countClients(settings string) int {
 	var config struct {
 		Clients []any `json:"clients"`
 	}
-	json.Unmarshal([]byte(settings), &config)
+	if err := json.Unmarshal([]byte(settings), &config); err != nil {
+		return 0
+	}
 	return len(config.Clients)
 }
 
@@ -180,7 +195,11 @@ func (s *Server) handleInbound(w http.ResponseWriter, r *http.Request) {
 		jsonResp(w, map[string]any{"success": false, "msg": "Invalid ID"})
 		return
 	}
-	sqlDB, _ := s.db.DB()
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		jsonResp(w, map[string]any{"success": false, "msg": "数据库连接失败"})
+		return
+	}
 
 	switch r.Method {
 	case "GET":
@@ -198,7 +217,10 @@ func (s *Server) handleInbound(w http.ResponseWriter, r *http.Request) {
 			"enable": enable, "settings": settings, "remark": remark,
 		}})
 	case "DELETE":
-		sqlDB.Exec("DELETE FROM inbounds WHERE id=?", id)
+		if _, err := sqlDB.Exec("DELETE FROM inbounds WHERE id=?", id); err != nil {
+			jsonResp(w, map[string]any{"success": false, "msg": "删除失败"})
+			return
+		}
 		jsonResp(w, map[string]any{"success": true, "msg": "Deleted"})
 	case "PUT":
 		var req struct {
@@ -213,7 +235,10 @@ func (s *Server) handleInbound(w http.ResponseWriter, r *http.Request) {
 			if *req.Enable {
 				v = 1
 			}
-			sqlDB.Exec("UPDATE inbounds SET enable=? WHERE id=?", v, id)
+			if _, err := sqlDB.Exec("UPDATE inbounds SET enable=? WHERE id=?", v, id); err != nil {
+				jsonResp(w, map[string]any{"success": false, "msg": "更新失败"})
+				return
+			}
 		}
 		jsonResp(w, map[string]any{"success": true})
 	default:
@@ -246,10 +271,17 @@ func (s *Server) handleClients(w http.ResponseWriter, r *http.Request) {
 			ExpiryTime int64  `json:"expiryTime"`
 		} `json:"clients"`
 	}
-	json.Unmarshal([]byte(settings), &config)
+	if err := json.Unmarshal([]byte(settings), &config); err != nil {
+		jsonResp(w, map[string]any{"success": false, "msg": "解析入站配置失败"})
+		return
+	}
 
 	// 查询每个客户端的流量统计（从 client_traffics 表）
-	sqlDB, _ := s.db.DB()
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		jsonResp(w, map[string]any{"success": false, "msg": "数据库连接失败"})
+		return
+	}
 	clients := []map[string]any{}
 	for i, c := range config.Clients {
 		var up, down int64
@@ -277,7 +309,11 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	go exec.Command("systemctl", "restart", "x-ui").Run()
+	go func() {
+		if err := exec.Command("systemctl", "restart", "x-ui").Run(); err != nil {
+			log.Printf("[NCP] 重启 x-ui 失败: %v", err)
+		}
+	}()
 	jsonResp(w, map[string]any{"success": true, "msg": "Restarting"})
 }
 
@@ -286,7 +322,9 @@ func (s *Server) handleRestartXray(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	exec.Command("pkill", "-f", "xray-linux").Run()
+	if err := exec.Command("pkill", "-f", "xray-linux").Run(); err != nil {
+		log.Printf("[NCP] 终止 xray 进程失败: %v", err)
+	}
 	jsonResp(w, map[string]any{"success": true, "msg": "Xray restarted"})
 }
 
@@ -303,7 +341,11 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		jsonResp(w, map[string]any{"success": false, "msg": "Invalid JSON"})
 		return
 	}
-	sqlDB, _ := s.db.DB()
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		jsonResp(w, map[string]any{"success": false, "msg": "数据库连接失败"})
+		return
+	}
 	for key, value := range req {
 		switch key {
 		case "panel_port":
@@ -312,14 +354,224 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 				jsonResp(w, map[string]any{"success": false, "msg": "Invalid port"})
 				return
 			}
-			sqlDB.Exec("UPDATE settings SET value=? WHERE key='webPort'", value)
+			if _, err := sqlDB.Exec("UPDATE settings SET value=? WHERE key='webPort'", value); err != nil {
+				jsonResp(w, map[string]any{"success": false, "msg": "更新端口失败"})
+				return
+			}
 		case "admin_user":
-			sqlDB.Exec("UPDATE settings SET value=? WHERE key='webUsername'", value)
+			if len(value) < 3 {
+				jsonResp(w, map[string]any{"success": false, "msg": "Username too short"})
+				return
+			}
+			if _, err := sqlDB.Exec("UPDATE settings SET value=? WHERE key='webUsername'", value); err != nil {
+				jsonResp(w, map[string]any{"success": false, "msg": "更新用户名失败"})
+				return
+			}
 		case "admin_pass":
-			sqlDB.Exec("UPDATE settings SET value=? WHERE key='webPassword'", value)
+			if len(value) < 6 {
+				jsonResp(w, map[string]any{"success": false, "msg": "Password too short (min 6)"})
+				return
+			}
+			// 密码必须经过 bcrypt 哈希后存储
+			hashedPass, err := bcryptHash(value)
+			if err != nil {
+				jsonResp(w, map[string]any{"success": false, "msg": "Failed to hash password"})
+				return
+			}
+			if _, err := sqlDB.Exec("UPDATE settings SET value=? WHERE key='webPassword'", hashedPass); err != nil {
+				jsonResp(w, map[string]any{"success": false, "msg": "更新密码失败"})
+				return
+			}
 		}
 	}
 	jsonResp(w, map[string]any{"success": true})
+}
+
+// ========== Xray Config & Relay ==========
+
+// handleXrayConfig GET/POST xrayTemplateConfig from settings table
+func (s *Server) handleXrayConfig(w http.ResponseWriter, r *http.Request) {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		jsonResp(w, map[string]any{"success": false, "msg": "数据库连接失败"})
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		var value string
+		if err := sqlDB.QueryRow("SELECT value FROM settings WHERE key='xrayTemplateConfig'").Scan(&value); err != nil {
+			jsonResp(w, map[string]any{"success": false, "msg": "读取配置失败"})
+			return
+		}
+		jsonResp(w, map[string]any{"success": true, "data": value})
+	case "POST":
+		var req struct {
+			Config string `json:"config"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonResp(w, map[string]any{"success": false, "msg": "Invalid JSON"})
+			return
+		}
+		// 验证 JSON 格式
+		var check map[string]any
+		if err := json.Unmarshal([]byte(req.Config), &check); err != nil {
+			jsonResp(w, map[string]any{"success": false, "msg": "配置不是合法的 JSON"})
+			return
+		}
+		if _, err := sqlDB.Exec("UPDATE settings SET value=? WHERE key='xrayTemplateConfig'", req.Config); err != nil {
+			jsonResp(w, map[string]any{"success": false, "msg": "更新配置失败"})
+			return
+		}
+		// 重启 Xray 使配置生效
+		if err := exec.Command("pkill", "-f", "xray-linux").Run(); err != nil {
+			log.Printf("[NCP] 重启 xray 失败: %v", err)
+		}
+		jsonResp(w, map[string]any{"success": true})
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleRelayOutbound POST=添加 relay outbound+routing, DELETE=移除
+func (s *Server) handleRelayOutbound(w http.ResponseWriter, r *http.Request) {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		jsonResp(w, map[string]any{"success": false, "msg": "数据库连接失败"})
+		return
+	}
+
+	// 读取当前 xrayTemplateConfig
+	var configStr string
+	if err := sqlDB.QueryRow("SELECT value FROM settings WHERE key='xrayTemplateConfig'").Scan(&configStr); err != nil {
+		jsonResp(w, map[string]any{"success": false, "msg": "读取 Xray 配置失败"})
+		return
+	}
+
+	var config map[string]any
+	if err := json.Unmarshal([]byte(configStr), &config); err != nil {
+		jsonResp(w, map[string]any{"success": false, "msg": "解析 Xray 配置失败"})
+		return
+	}
+
+	switch r.Method {
+	case "POST":
+		var req struct {
+			InboundTag string         `json:"inboundTag"`
+			Outbound   map[string]any `json:"outbound"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonResp(w, map[string]any{"success": false, "msg": "Invalid JSON"})
+			return
+		}
+		if req.InboundTag == "" || req.Outbound == nil {
+			jsonResp(w, map[string]any{"success": false, "msg": "inboundTag 和 outbound 必填"})
+			return
+		}
+
+		outboundTag, _ := req.Outbound["tag"].(string)
+		if outboundTag == "" {
+			jsonResp(w, map[string]any{"success": false, "msg": "outbound.tag 必填"})
+			return
+		}
+
+		// 追加 outbound
+		outbounds, _ := config["outbounds"].([]any)
+		outbounds = append(outbounds, req.Outbound)
+		config["outbounds"] = outbounds
+
+		// 追加 routing rule
+		routing, _ := config["routing"].(map[string]any)
+		if routing == nil {
+			routing = map[string]any{}
+		}
+		rules, _ := routing["rules"].([]any)
+		rules = append(rules, map[string]any{
+			"type":        "field",
+			"inboundTag":  []any{req.InboundTag},
+			"outboundTag": outboundTag,
+		})
+		routing["rules"] = rules
+		config["routing"] = routing
+
+		// 写回
+		newConfig, _ := json.Marshal(config)
+		if _, err := sqlDB.Exec("UPDATE settings SET value=? WHERE key='xrayTemplateConfig'", string(newConfig)); err != nil {
+			jsonResp(w, map[string]any{"success": false, "msg": "保存配置失败"})
+			return
+		}
+		if err := exec.Command("pkill", "-f", "xray-linux").Run(); err != nil {
+			log.Printf("[NCP] 重启 xray 失败: %v", err)
+		}
+		jsonResp(w, map[string]any{"success": true})
+
+	case "DELETE":
+		var req struct {
+			OutboundTag string `json:"outboundTag"`
+			InboundTag  string `json:"inboundTag"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonResp(w, map[string]any{"success": false, "msg": "Invalid JSON"})
+			return
+		}
+		if req.OutboundTag == "" {
+			jsonResp(w, map[string]any{"success": false, "msg": "outboundTag 必填"})
+			return
+		}
+
+		// 保护内置 outbound 标签
+		protectedTags := map[string]bool{"direct": true, "blocked": true, "block": true}
+		if protectedTags[req.OutboundTag] {
+			jsonResp(w, map[string]any{"success": false, "msg": "不允许删除内置 outbound: " + req.OutboundTag})
+			return
+		}
+
+		// 移除 outbound
+		if outbounds, ok := config["outbounds"].([]any); ok {
+			filtered := make([]any, 0, len(outbounds))
+			for _, ob := range outbounds {
+				if obMap, ok := ob.(map[string]any); ok {
+					if tag, _ := obMap["tag"].(string); tag == req.OutboundTag {
+						continue
+					}
+				}
+				filtered = append(filtered, ob)
+			}
+			config["outbounds"] = filtered
+		}
+
+		// 移除关联 routing rules
+		if routing, ok := config["routing"].(map[string]any); ok {
+			if rules, ok := routing["rules"].([]any); ok {
+				filtered := make([]any, 0, len(rules))
+				for _, rule := range rules {
+					ruleMap, ok := rule.(map[string]any)
+					if !ok {
+						filtered = append(filtered, rule)
+						continue
+					}
+					if tag, _ := ruleMap["outboundTag"].(string); tag == req.OutboundTag {
+						continue
+					}
+					filtered = append(filtered, rule)
+				}
+				routing["rules"] = filtered
+			}
+		}
+
+		newConfig, _ := json.Marshal(config)
+		if _, err := sqlDB.Exec("UPDATE settings SET value=? WHERE key='xrayTemplateConfig'", string(newConfig)); err != nil {
+			jsonResp(w, map[string]any{"success": false, "msg": "保存配置失败"})
+			return
+		}
+		if err := exec.Command("pkill", "-f", "xray-linux").Run(); err != nil {
+			log.Printf("[NCP] 重启 xray 失败: %v", err)
+		}
+		jsonResp(w, map[string]any{"success": true})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // ========== DB helpers ==========
@@ -333,8 +585,10 @@ func (s *Server) getInboundCount() int {
 func (s *Server) getTotalTraffic(field string) int64 {
 	var total int64
 	switch field {
-	case "up", "down":
-		s.db.Raw(fmt.Sprintf("SELECT COALESCE(SUM(%s),0) FROM inbounds", field)).Scan(&total)
+	case "up":
+		s.db.Raw("SELECT COALESCE(SUM(up),0) FROM inbounds").Scan(&total)
+	case "down":
+		s.db.Raw("SELECT COALESCE(SUM(down),0) FROM inbounds").Scan(&total)
 	}
 	return total
 }

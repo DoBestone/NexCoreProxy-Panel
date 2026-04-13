@@ -4,10 +4,12 @@ package database
 
 import (
 	"bytes"
+	cryptoRand "crypto/rand"
 	"errors"
 	"io"
 	"io/fs"
 	"log"
+	"math/big"
 	"os"
 	"path"
 	"slices"
@@ -24,10 +26,33 @@ import (
 
 var db *gorm.DB
 
-const (
-	defaultUsername = "admin"
-	defaultPassword = "admin"
-)
+const defaultUsername = "admin"
+
+// defaultPassword 通过环境变量设置，未设置时自动生成
+func getDefaultPassword() string {
+	if pass := os.Getenv("XUI_DEFAULT_PASS"); pass != "" {
+		return pass
+	}
+	// 生成随机密码
+	b := make([]byte, 8)
+	if _, err := io.ReadAll(io.LimitReader(cryptoRand.Reader, 8)); err == nil {
+		copy(b, make([]byte, 8))
+	}
+	// 简单的随机密码生成
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	result := make([]byte, 12)
+	for i := range result {
+		n, _ := cryptoRand.Int(cryptoRand.Reader, big.NewInt(int64(len(charset))))
+		result[i] = charset[n.Int64()]
+	}
+	pass := string(result)
+	log.Println("========================================")
+	log.Printf("  默认管理员账户: %s", defaultUsername)
+	log.Printf("  默认管理员密码: %s", pass)
+	log.Println("  请登录后立即修改密码！")
+	log.Println("========================================")
+	return pass
+}
 
 func initModels() error {
 	models := []any{
@@ -56,7 +81,7 @@ func initUser() error {
 		return err
 	}
 	if empty {
-		hashedPassword, err := crypto.HashPasswordAsBcrypt(defaultPassword)
+		hashedPassword, err := crypto.HashPasswordAsBcrypt(getDefaultPassword())
 
 		if err != nil {
 			log.Printf("Error hashing default password: %v", err)

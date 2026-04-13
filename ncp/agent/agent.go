@@ -140,12 +140,18 @@ func cmdInfo() {
 }
 
 func cmdRestart() {
-	exec.Command("systemctl", "restart", "x-ui").Run()
+	if err := exec.Command("systemctl", "restart", "x-ui").Run(); err != nil {
+		fmt.Printf("面板重启失败: %v\n", err)
+		return
+	}
 	fmt.Println("面板重启成功")
 }
 
 func cmdRestartXray() {
-	exec.Command("pkill", "-f", "xray-linux").Run()
+	if err := exec.Command("pkill", "-f", "xray-linux").Run(); err != nil {
+		fmt.Printf("Xray 重启失败: %v\n", err)
+		return
+	}
 	fmt.Println("Xray 已重启")
 }
 
@@ -252,8 +258,11 @@ func CmdGenToken() {
 	// Store in both DB and file for backward compatibility
 	db := database.GetDB()
 	db.Exec("INSERT OR REPLACE INTO settings (`key`, value) VALUES ('ncpAPIToken', ?)", token)
-	os.WriteFile(TokenFile, []byte(token), 0600)
-	fmt.Printf("API Token 已生成: %s\n", token)
+	if err := os.WriteFile(TokenFile, []byte(token), 0600); err != nil {
+		fmt.Printf("写入 Token 文件失败: %v\n", err)
+		return
+	}
+	fmt.Printf("API Token 已生成并保存到: %s\n", TokenFile)
 }
 
 // CmdGetToken prints the current API token.
